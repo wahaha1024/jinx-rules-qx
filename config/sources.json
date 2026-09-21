@@ -8,6 +8,8 @@
   "convert_unknown_url": false,
   "convert_regex": false,
 
+  "single_filter_output": "jinx-adblock-qx.list",
+
   "sources": {
     "domain": {
       "blacklist": [

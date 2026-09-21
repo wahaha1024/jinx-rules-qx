@@ -455,7 +455,10 @@ def main(argv=None):
                 skips.append(("unexpected mitm_skip line: " + low, path))
 
     os.makedirs(args.out_dir, exist_ok=True)
-    wl_n, bl_n = write_filter(os.path.join(args.out_dir, "jinx-qx-filter.list"), commit, wl, bl)
+    # The single root-level filter file is the primary deliverable (subscribed in QX);
+    # generated/ holds the optional extras (rewrite / mitm skip / audit log).
+    single_path = os.path.join(ROOT, cfg.get("single_filter_output", "jinx-adblock-qx.list"))
+    wl_n, bl_n = write_filter(single_path, commit, wl, bl)
     rw_n = write_rewrite(os.path.join(args.out_dir, "jinx-qx-rewrite.conf"), commit, rewrite_rules)
     mitm_n = write_mitm(os.path.join(args.out_dir, "jinx-mitm-skip.txt"), commit, mitm)
     skip_n = write_unsupported(os.path.join(args.out_dir, "unsupported.log"), skips)

@@ -9,6 +9,7 @@ on:
     paths:
       - "converter/**"
       - "config/**"
+      - ".github/workflows/update.yml"
 
 permissions:
   contents: write
@@ -40,14 +41,19 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add generated/
+          git config http.version HTTP/1.1
+          git add jinx-adblock-qx.list generated/
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No rule changes."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
             git commit -m "update generated rules ($(date -u +%FT%TZ))"
-            git push
+            for i in 1 2 3; do
+              git pull --rebase -q origin main && git push && break
+              echo "push attempt $i failed, retrying after backoff"
+              sleep $((i * 15))
+            done
           fi
 
       - name: Report unsupported rules
