@@ -10,6 +10,16 @@
 
   "single_filter_output": "jinx-adblock-qx.list",
 
+  "extra_sources": [
+    {
+      "name": "fuck_apps_ad_sr",
+      "type": "sgmodule",
+      "url": "https://raw.githubusercontent.com/uxudjs/Shadowrocket/refs/heads/main/modules/fuck_apps_ad_sr.sgmodule",
+      "include_rule_section": true,
+      "include_url_rewrite": true
+    }
+  ],
+
   "sources": {
     "domain": {
       "blacklist": [

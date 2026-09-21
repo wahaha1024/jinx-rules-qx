@@ -5,3 +5,6 @@ __pycache__/
 tmp/
 *.log
 !generated/unsupported.log
+# dev-tool caches (auto-downloaded by tools/compare_sources.py, and the converter's offline fallback)
+tools/*.sgmodule
+tools/jinx_*.txt

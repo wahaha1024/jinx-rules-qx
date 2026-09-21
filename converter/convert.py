@@ -39,8 +39,20 @@ WILDCARD_CHARS_RE = re.compile(r"^[a-z0-9.*?_-]+$")
 # characters that make a path a real regex rather than a literal/wildcard path
 REGEX_METACHARS = set("()[]{}+^$|\\")
 
-KIND_ORDER = {"exact": 0, "suffix": 1, "wildcard": 2, "ip": 3}
-KIND_TYPE = {"exact": "host", "suffix": "host-suffix", "wildcard": "host-wildcard", "ip": "ip-cidr"}
+KIND_ORDER = {"exact": 0, "suffix": 1, "wildcard": 2, "keyword": 3, "ip": 4}
+KIND_TYPE = {"exact": "host", "suffix": "host-suffix", "wildcard": "host-wildcard",
+             "keyword": "host-keyword", "ip": "ip-cidr"}
+
+# --- extra source: Surge/Shadowrocket .sgmodule merge support ---
+SG_KIND = {"DOMAIN": "exact", "DOMAIN-SUFFIX": "suffix", "DOMAIN-WILDCARD": "wildcard",
+           "DOMAIN-KEYWORD": "keyword", "IP-CIDR": "ip", "IP6-CIDR": "ip"}
+SG_REWRITE_ACTIONS = {"reject", "reject-200", "reject-img", "reject-dict", "reject-array"}
+SGM_RW_RE = re.compile(r"^(\S+)\s+-\s+([A-Za-z0-9-]+)$")
+KEYWORD_RE = re.compile(r"^[a-z0-9._-]+$")
+
+
+def new_bucket():
+    return {"exact": set(), "suffix": set(), "wildcard": set(), "keyword": set(), "ip": set()}
 
 
 def log(msg):
@@ -103,6 +115,83 @@ def clean_lines(text):
         if not line or line.startswith("#") or line.startswith(";"):
             continue
         yield line
+
+
+def parse_sgmodule(text):
+    """Split a Surge/Shadowrocket module into {section_name: [content lines]}."""
+    sections, cur = {}, None
+    for raw in text.splitlines():
+        s = raw.strip()
+        if s.startswith("[") and s.endswith("]"):
+            cur = s[1:-1].strip()
+            sections.setdefault(cur, [])
+            continue
+        if cur is None or not s or s.startswith("#"):
+            continue
+        sections[cur].append(s)
+    return sections
+
+
+def convert_sgmodule_rules(lines, source):
+    """[Rule] lines -> {reject: [(kind, val)], direct: [...]}; rest -> skipped."""
+    out = {"reject": [], "direct": []}
+    bad = []
+    for s in lines:
+        parts = [p.strip() for p in s.split(",")]
+        if len(parts) < 2:
+            bad.append(("malformed sgmodule rule: " + s, source))
+            continue
+        typ, val = parts[0].upper(), parts[1].lower()
+        pol = parts[2].upper() if len(parts) > 2 else ""
+        kind = SG_KIND.get(typ)
+        if kind is None:
+            bad.append(("unsupported sgmodule rule type %s: %s" % (typ, s), source))
+            continue
+        if pol not in ("REJECT", "DIRECT"):
+            bad.append(("unsupported sgmodule policy %s: %s" % (pol or "(none)", s), source))
+            continue
+        if kind == "wildcard" and not valid_wildcard(val):
+            bad.append(("unparseable sgmodule wildcard: " + s, source))
+            continue
+        if kind == "keyword" and not KEYWORD_RE.match(val):
+            bad.append(("unparseable sgmodule keyword: " + s, source))
+            continue
+        if kind in ("exact", "suffix") and not valid_domain(val):
+            bad.append(("unparseable sgmodule domain: " + s, source))
+            continue
+        out["reject" if pol == "REJECT" else "direct"].append((kind, val))
+    return out, bad
+
+
+def convert_sgmodule_rewrites(lines, source):
+    """[URL Rewrite] 'pattern - action' -> QX '{pattern} url {action}' rules."""
+    ok, bad = [], []
+    for s in lines:
+        m = SGM_RW_RE.match(s)
+        if not m:
+            bad.append(("sgmodule rewrite not in 'pattern - action' form: " + s, source))
+            continue
+        pattern, action = m.group(1), m.group(2).lower()
+        if action not in SG_REWRITE_ACTIONS:
+            bad.append(("sgmodule rewrite action not convertible (%s): %s" % (action, s), source))
+            continue
+        ok.append({"regex": pattern.replace("\\/", "/"), "raw": s, "action": action})
+    return ok, bad
+
+
+def load_extra_source(src):
+    """Fetch an extra source, falling back to tools/<name>.sgmodule cache."""
+    url = src.get("url")
+    if url:
+        try:
+            return fetch(url)
+        except Exception as e:  # noqa: BLE001 - fall back to cache, then skip
+            log("WARN extra source %s download failed (%s), trying local cache" % (src.get("name"), e))
+    cache = os.path.join(ROOT, "tools", src.get("name", "extra") + ".sgmodule")
+    if os.path.exists(cache):
+        with open(cache, "r", encoding="utf-8-sig", errors="replace") as f:
+            return f.read()
+    return None
 
 
 # ---------------------------------------------------------------- domain classification
@@ -240,6 +329,7 @@ def make_whitelist_predicates(wl_domains, wl_urls):
     wl_exact = wl_domains["exact"]
     wl_suffix = wl_domains["suffix"]
     wl_wild = sorted(wl_domains["wildcard"])
+    wl_keywords = wl_domains["keyword"]
     generic_paths = [u["path"].rstrip("*") for u in wl_urls if not u["host"]]
     hosted = [u for u in wl_urls if u["host"]]
 
@@ -249,6 +339,8 @@ def make_whitelist_predicates(wl_domains, wl_urls):
         for s in wl_suffix:
             if v == s or v.endswith("." + s):
                 return True
+        if any(k in v for k in wl_keywords):
+            return True
         return any(host_wildcard_match(v, p) for p in wl_wild)
 
     def url_whitelisted(host, path):
@@ -265,12 +357,17 @@ def make_whitelist_predicates(wl_domains, wl_urls):
 
 # ---------------------------------------------------------------- output
 
+EXTRA_NOTES = []
+
+
 def header(lines_extra):
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     out = [
         "# Generated by jinx-rules-qx converter. DO NOT EDIT BY HAND.",
         "# Source: https://github.com/VME98/jinx-rules",
     ]
+    for note in EXTRA_NOTES:
+        out.append("# Merged source: " + note)
     out += ["# " + l for l in lines_extra]
     out.append("# Generated: " + now)
     return out
@@ -289,7 +386,7 @@ def write_filter(path, commit, wl, bl):
     for bucket, policy, title in ((wl, "direct", "WHITELIST"), (bl, "reject", "BLACKLIST")):
         lines.append("# ==== %s (%s) ====" % (title, policy))
         n = 0
-        for kind in ("exact", "suffix", "wildcard", "ip"):
+        for kind in ("exact", "suffix", "wildcard", "keyword", "ip"):
             for v in sorted(bucket[kind]):
                 lines.append(fmt_rule(kind, v, policy))
                 n += 1
@@ -308,7 +405,7 @@ def write_rewrite(path, commit, rules):
     lines.append("")
     lines.append("[rewrite_local]")
     for r in rules:
-        lines.append("%s url reject-200" % r["regex"])
+        lines.append("%s url %s" % (r["regex"], r.get("action", "reject-200")))
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
     return len(rules)
@@ -359,23 +456,59 @@ def main(argv=None):
 
     files = load_sources(cfg, args.source_dir)
 
-    wl, bl = {"exact": set(), "suffix": set(), "wildcard": set(), "ip": set()}, \
-             {"exact": set(), "suffix": set(), "wildcard": set(), "ip": set()}
+    wl, bl = new_bucket(), new_bucket()
     extra_bl_urls = []  # URL lines mixed into domain files, routed through the URL pipeline
     wl_doms, wl_skips, wl_dups = parse_domain_files(
         files, cfg["sources"]["domain"]["whitelist"], wl)
     bl_doms, bl_skips, bl_dups = parse_domain_files(
         files, cfg["sources"]["domain"]["blacklist"], bl, url_pipeline=extra_bl_urls)
+
+    # merge extra sources (e.g. Shadowrocket modules) into the same buckets
+    extra_rewrites, extra_bad, sg_stats = [], [], []
+    EXTRA_NOTES.clear()
+    for src in cfg.get("extra_sources", []):
+        name = src.get("name", "extra")
+        text = load_extra_source(src)
+        if text is None:
+            log("WARN extra source %s unavailable, skipped" % name)
+            continue
+        if src.get("type", "sgmodule") != "sgmodule":
+            log("WARN extra source %s: unknown type, skipped" % name)
+            continue
+        EXTRA_NOTES.append("%s (%s)" % (name, src.get("url", "local")))
+        sections = parse_sgmodule(text)
+        if src.get("include_rule_section", True):
+            conv, bad = convert_sgmodule_rules(sections.get("Rule", []), name)
+            for kind, val in conv["direct"]:
+                wl[kind].add(val)
+            for kind, val in conv["reject"]:
+                bl[kind].add(val)
+            sg_stats.append("%s: +%d reject, +%d direct domain rules"
+                            % (name, len(conv["reject"]), len(conv["direct"])))
+            extra_bad += bad
+        if src.get("include_url_rewrite", True):
+            conv, bad = convert_sgmodule_rewrites(sections.get("URL Rewrite", []), name)
+            extra_rewrites += conv
+            sg_stats.append("%s: +%d URL rewrite rules" % (name, len(conv)))
+            extra_bad += bad
+        for sec, why in (("Body Rewrite", "Surge jq body rewrite, QX has no equivalent"),
+                         ("Script", "remote script action, keep in Shadowrocket/Surge or port by hand"),
+                         ("MITM", "MITM hostname list, must stay manual")):
+            n = len(sections.get(sec, []))
+            if n:
+                extra_bad.append(("[%s] not converted (%s): %d entries" % (sec, why, n), name))
     domain_whitelisted, url_whitelisted = make_whitelist_predicates(
         wl, build_url_rules(files, cfg["sources"]["url"]["whitelist"])[0])
 
     # blacklist domains suppressed by whitelist
     bl_removed_by_wl = 0
-    for kind in ("exact", "suffix", "wildcard", "ip"):
+    for kind in ("exact", "suffix", "wildcard", "keyword", "ip"):
         keep = set()
         for v in bl[kind]:
-            probe = v if kind in ("exact", "wildcard") else v  # suffix roots checked as-is
-            if domain_whitelisted(probe):
+            if kind == "keyword":
+                keep.add(v)  # substring rules cannot be checked as a single host
+                continue
+            if domain_whitelisted(v):
                 bl_removed_by_wl += 1
             else:
                 keep.add(v)
@@ -392,7 +525,7 @@ def main(argv=None):
             bl_unparsed.append((line, path))
     wl_urls, wl_unparsed = build_url_rules(files, cfg["sources"]["url"]["whitelist"])
 
-    skips = list(bl_skips) + list(wl_skips)
+    skips = list(bl_skips) + list(wl_skips) + list(extra_bad)
     skips += [("unparseable URL (convert_unknown_url=false): " + l, f) for l, f in bl_unparsed]
     skips += [("unparseable whitelist URL (ignored): " + l, f) for l, f in wl_unparsed]
 
@@ -405,8 +538,12 @@ def main(argv=None):
 
     rewrite_rules, degraded = [], []
     stats = {"wl_url_excluded": 0, "dead_domain_covered": 0, "generic_path": 0,
-             "regex_like": 0, "unknown_url": 0}
+             "regex_like": 0, "unknown_url": 0, "dup_rewrite": 0}
     seen_regex = set()
+    for r in extra_rewrites:  # from merged sgmodules, already in QX syntax
+        if not dedup or r["regex"] not in seen_regex:
+            seen_regex.add(r["regex"])
+            rewrite_rules.append(r)
     for u in bl_urls:
         host, path = u["host"], u["path"]
         if not host:  # generic path rule without any host context
@@ -442,6 +579,8 @@ def main(argv=None):
         if not dedup or regex not in seen_regex:
             seen_regex.add(regex)
             rewrite_rules.append({"regex": regex, "raw": u["raw"]})
+        else:
+            stats["dup_rewrite"] += 1
 
     # mitm skip list: keep original syntax (exact domains and *.wildcard both legal in [mitm])
     mitm = set()
@@ -469,9 +608,10 @@ def main(argv=None):
     log("mitm skip: %d" % mitm_n)
     log("unsupported: %d" % skip_n)
     log("dedup: %d domain lines (%d wl, %d bl); %d rewrite dups" %
-        (wl_dups + bl_dups, wl_dups, bl_dups, 0))
+        (wl_dups + bl_dups, wl_dups, bl_dups, stats["dup_rewrite"]))
     log("url excluded by whitelist: %d, covered by domain rules: %d, generic path skipped: %d" %
         (stats["wl_url_excluded"], stats["dead_domain_covered"], stats["generic_path"]))
+    log("extra sources: " + ("; ".join(sg_stats) if sg_stats else "none"))
     return 0
 
 

@@ -101,9 +101,52 @@ def test_clean_lines_case_preserved():
 
 
 def test_whitelist_domain_match():
-    wl = {"exact": {"a.com"}, "suffix": {"safe.com"}, "wildcard": {"cm-10-*.getui.com"}}
+    wl = {"exact": {"a.com"}, "suffix": {"safe.com"}, "wildcard": {"cm-10-*.getui.com"},
+          "keyword": set(), "ip": set()}
     dw, _ = convert.make_whitelist_predicates(wl, [])
     assert dw("a.com")
     assert dw("sub.safe.com")
     assert dw("cm-10-77.getui.com")
     assert not dw("b.com")
+
+
+def test_sgmodule_rule_conversion():
+    conv, bad = convert.convert_sgmodule_rules([
+        "DOMAIN,ads.example.com,REJECT",
+        "DOMAIN-SUFFIX,tracker.io,REJECT",
+        "DOMAIN-WILDCARD,*-ad.*,REJECT",
+        "DOMAIN-KEYWORD,umeng,REJECT",
+        "IP-CIDR,1.2.3.4/32,REJECT",
+        "DOMAIN-WILDCARD,adblock.*,DIRECT",
+        "DOMAIN,bad-policy.com,PROXY",
+    ], "test")
+    assert ("exact", "ads.example.com") in conv["reject"]
+    assert ("suffix", "tracker.io") in conv["reject"]
+    assert ("wildcard", "*-ad.*") in conv["reject"]
+    assert ("keyword", "umeng") in conv["reject"]
+    assert ("ip", "1.2.3.4/32") in conv["reject"]
+    assert ("wildcard", "adblock.*") in conv["direct"]
+    assert len(bad) == 1  # PROXY policy is not representable in the filter file
+
+
+def test_sgmodule_rewrite_conversion():
+    ok, bad = convert.convert_sgmodule_rewrites([
+        r"^https?:\/\/unet\.quark\.cn\/v3\/ad\/ - reject",
+        r"^https?:\/\/a\.b\/x - reject-dict",
+        r"^https?:\/\/a\.b\/y - reject-img",
+        r"^https?:\/\/a\.b\/y - header",
+    ], "test")
+    assert ok[0]["regex"] == r"^https?://unet\.quark\.cn/v3/ad/"  # \/ unescaped for QX
+    assert ok[0]["action"] == "reject"
+    assert ok[1]["action"] == "reject-dict"
+    assert ok[2]["action"] == "reject-img"
+    assert len(bad) == 1
+
+
+def test_parse_sgmodule_sections():
+    text = "#!name=x\n[Rule]\nDOMAIN,a.com,REJECT\n\n# c\n[Script]\nfoo = bar\n[MITM]\nhostname = %APPEND% a.com\n"
+    secs = convert.parse_sgmodule(text)
+    assert secs["Rule"] == ["DOMAIN,a.com,REJECT"]
+    assert secs["Script"] == ["foo = bar"]
+    assert secs["MITM"] == ["hostname = %APPEND% a.com"]
+    assert "URL Rewrite" not in secs

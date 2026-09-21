@@ -1,5 +1,9 @@
 unparseable domain line: wpad :: rules/blacklist.txt
 unparseable domain line: wpad :: rules/domain_blacklist.txt
+sgmodule rewrite not in 'pattern - action' form: (^https?:\/\/[\w-]+\.googlevideo\.com\/(?!dclk_video_ads).+?)&ctier=L(&.+?),ctier,(.+) $1$2$3 302 :: fuck_apps_ad_sr
+[Body Rewrite] not converted (Surge jq body rewrite, QX has no equivalent): 44 entries :: fuck_apps_ad_sr
+[Script] not converted (remote script action, keep in Shadowrocket/Surge or port by hand): 100 entries :: fuck_apps_ad_sr
+[MITM] not converted (MITM hostname list, must stay manual): 1 entries :: fuck_apps_ad_sr
 unparseable URL (convert_unknown_url=false): .splash :: rules/url_blacklist.txt
 unparseable URL (convert_unknown_url=false): .ads. :: rules/url_blacklist.txt
 unparseable URL (convert_unknown_url=false): .ad. :: rules/url_blacklist.txt
