@@ -379,6 +379,7 @@ def host_from_regex(rx):
     host = rest[:end]
     for a, b in (("\\.", "."), ("\\-", "-"), ("\\_", "_")):
         host = host.replace(a, b)
+    host = re.sub(r":\d+$", "", host)  # explicit port is not valid in [mitm] hostname
     host = host.replace(".*", "*").replace("[^/]*", "*").replace("[^/]", "?").replace("\\", "")
     if not host or "(" in host or ")" in host or "[" in host or "]" in host:
         return None
@@ -543,18 +544,100 @@ def write_mitm(path, commit, entries):
     return len(entries)
 
 
-def write_mitm_required(path, commit, hosts):
+def mitm_suffix_groups(hosts, min_group=3):
+    """Group exact hosts by their last two labels; only groups big enough to be worth
+    folding, and only for hosts with >= 3 labels (so *.a.com never swallows a.com)."""
+    groups = {}
+    for h in hosts:
+        if "*" in h or "?" in h:
+            continue
+        labels = h.split(".")
+        if len(labels) < 3:
+            continue
+        groups.setdefault(".".join(labels[-2:]), set()).add(h)
+    return {s: sorted(m) for s, m in groups.items() if len(m) >= min_group}
+
+
+def fold_mitm_hosts(hosts, skip_entries, fold_suffixes):
+    """Fold exact hosts into *.suffix, but ONLY for suffixes the user opted into via
+    config (mitm_fold_suffixes). Folding widens MITM decryption, so the default stays
+    exact; we refuse any suffix whose wildcard would swallow a must-not-decrypt host."""
+    if not fold_suffixes:
+        return set(hosts), 0
+    wanted = set(fold_suffixes)
+    folded, removable = set(), set()
+    for suffix, members in mitm_suffix_groups(hosts).items():
+        if suffix not in wanted:
+            continue
+        wildcard = "*." + suffix
+        if any(in_mitm_skip(h, skip_entries) for h in members):
+            continue
+        if any((e.startswith("*.") and (e[2:] == suffix or e[2:].endswith("." + suffix)))
+               for e in skip_entries):
+            continue
+        folded.add(wildcard)
+        removable |= set(members)
+    return (set(hosts) - removable) | folded, len(removable)
+
+
+def write_mitm_required(path, commit, hosts, skip_entries, fold_suffixes=()):
+    folded, folded_away = fold_mitm_hosts(hosts, skip_entries, fold_suffixes)
+    groups = mitm_suffix_groups(hosts)
     lines = header([
         "Upstream commit: %s" % commit,
         "Hosts that jinx-qx-rewrite.conf needs decrypted to intercept over HTTPS.",
         "Add them to your [mitm] hostname (comma separated) for the rewrite file to fire.",
-        "Exact names only; hosts covered by jinx-mitm-skip.txt are already excluded.",
-        "Many entries can be folded into a single *.domain.com wildcard by hand.",
+        "Domains from jinx-mitm-skip.txt are already excluded.",
+        "A comma-joined paste copy sits in jinx-mitm-required.oneline.txt.",
     ])
-    lines += sorted(hosts)
+    if not fold_suffixes and groups:
+        top = sorted(groups.items(), key=lambda kv: -len(kv[1]))[:6]
+        lines.append("# Optional: to shorten the list, add any of these to")
+        lines.append("# config/sources.json -> mitm_fold_suffixes, which folds the group")
+        lines.append("# into a single *.suffix entry (widens decryption to all subdomains):")
+        for suffix, members in top:
+            lines.append("#   %-24s %d hosts (%s%s)"
+                         % (suffix, len(members), ", ".join(members[:2]),
+                            ", ..." if len(members) > 2 else ""))
+    lines += sorted(folded)
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
-    return len(hosts)
+
+    oneline = path.replace(".txt", ".oneline.txt")
+    with open(oneline, "w", encoding="utf-8", newline="\n") as f:
+        f.write(", ".join(sorted(folded)) + "\n")
+    return len(hosts), folded, folded_away
+
+
+def write_qx_snippet(path, commit, rewrite_count, mitm_skip, mitm_required):
+    """A copy-paste [filter_remote]/[rewrite_remote]/[mitm] block for the user's own
+    QX profile, with the subscription URL and the skip/required host lists filled in."""
+    repo_url = "https://raw.githubusercontent.com/wahaha1024/jinx-rules-qx/main"
+    lines = header([
+        "Upstream commit: %s" % commit,
+        "Copy the sections you need into your own Quantumult X profile.",
+        "Do NOT set force-policy=reject on the filter resource: its whitelist",
+        "rules must stay effective (they are already 'direct' inside the file).",
+    ])
+    lines += [
+        "",
+        "[filter_remote]",
+        "%s/jinx-adblock-qx.list, tag=Jinx, update-interval=21600, enabled=true" % repo_url,
+        "",
+        "[rewrite_remote]",
+        "%s/generated/jinx-qx-rewrite.conf, tag=Jinx-URL, update-interval=21600, enabled=true" % repo_url,
+        "",
+        "# [mitm] hostname: keep your own entries and add the required hosts below.",
+        "# Keep these OUT of hostname (payments/captchas break when decrypted):",
+        "#   " + ", ".join(sorted(mitm_skip)),
+        "",
+        "# Required for the rewrite file to fire over HTTPS (%d rewrite rules):" % rewrite_count,
+        "hostname = " + ", ".join(sorted(mitm_required)),
+        "",
+    ]
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines) + "\n")
+    return len(mitm_required)
 
 
 def write_unsupported(path, skips):
@@ -562,6 +645,68 @@ def write_unsupported(path, skips):
         for reason, src in skips:
             f.write("%s :: %s\n" % (reason, src))
     return len(skips)
+
+
+FILTER_LINE_RE = re.compile(r"^(host|host-suffix|host-wildcard|host-keyword|ip-cidr), "
+                            r"[^,]+, (direct|reject)$")
+REWRITE_LINE_RE = re.compile(r"^(\S+) url (reject|reject-200|reject-img|reject-dict|reject-array)$")
+
+
+def validate_outputs(filter_path, rewrite_path, mitm_path, mitm_req_path):
+    """Fail loudly instead of shipping a broken subscription: every line must parse,
+    whitelists must precede blacklists, nothing may repeat, regexes must compile."""
+    errors = []
+
+    seen_direct_done = False
+    seen = set()
+    with open(filter_path, encoding="utf-8") as f:
+        for i, ln in enumerate(f, 1):
+            ln = ln.rstrip("\n")
+            if not ln or ln.startswith("#"):
+                continue
+            m = FILTER_LINE_RE.match(ln)
+            if not m:
+                errors.append("filter:%d malformed rule: %s" % (i, ln))
+                continue
+            if m.group(2) == "reject":
+                seen_direct_done = True
+            elif seen_direct_done:
+                errors.append("filter:%d whitelist rule after blacklist rules: %s" % (i, ln))
+            if ln in seen:
+                errors.append("filter:%d duplicate rule: %s" % (i, ln))
+            seen.add(ln)
+    if not seen:
+        errors.append("filter file is empty")
+
+    with open(rewrite_path, encoding="utf-8") as f:
+        n_rw = 0
+        for i, ln in enumerate(f, 1):
+            ln = ln.rstrip("\n")
+            if not ln or ln.startswith("#") or ln.startswith("["):
+                continue
+            m = REWRITE_LINE_RE.match(ln)
+            if not m:
+                errors.append("rewrite:%d malformed rule: %s" % (i, ln))
+                continue
+            n_rw += 1
+            try:
+                re.compile(m.group(1))
+            except re.error as e:
+                errors.append("rewrite:%d regex does not compile (%s): %s" % (i, e, ln))
+        if n_rw == 0:
+            errors.append("rewrite file has no rules")
+
+    for path, name in ((mitm_path, "mitm-skip"), (mitm_req_path, "mitm-required")):
+        n = sum(1 for ln in open(path, encoding="utf-8")
+                if ln.strip() and not ln.startswith("#"))
+        if n == 0:
+            errors.append("%s file is empty" % name)
+
+    if errors:
+        for e in errors[:40]:
+            log("VALIDATION ERROR: " + e)
+        raise SystemExit("output validation failed with %d error(s)" % len(errors))
+    return len(seen), n_rw
 
 
 # ---------------------------------------------------------------- main
@@ -746,16 +891,39 @@ def main(argv=None):
         h = host_from_regex(r["regex"])
         if h and not in_mitm_skip(h, mitm):
             mitm_hosts.add(h)
-    mitm_req_n = write_mitm_required(
-        os.path.join(args.out_dir, "jinx-mitm-required.txt"), commit, mitm_hosts)
+    mitm_req_n, mitm_req_set, mitm_folded_saved = write_mitm_required(
+        os.path.join(args.out_dir, "jinx-mitm-required.txt"), commit, mitm_hosts, mitm,
+        cfg.get("mitm_fold_suffixes", []))
+    write_qx_snippet(os.path.join(args.out_dir, "qx-config-snippet.conf"),
+                     commit, rw_n, mitm, mitm_req_set)
+
+    # safety net: a host-keyword rule must never shadow a whitelisted domain
+    wl_all = wl["exact"] | wl["suffix"] | wl["wildcard"]
+    kw_clashes = 0
+    for kw in sorted(bl["keyword"]):
+        hits = sorted(d for d in wl_all if kw in d)
+        if hits:
+            kw_clashes += 1
+            skips.append(("WARNING host-keyword '%s' also matches whitelisted: %s"
+                          % (kw, ", ".join(hits[:5])), "whitelist/blacklist conflict"))
 
     skip_n = write_unsupported(os.path.join(args.out_dir, "unsupported.log"), skips)
 
+    validated_n, validated_rw = validate_outputs(
+        single_path,
+        os.path.join(args.out_dir, "jinx-qx-rewrite.conf"),
+        os.path.join(args.out_dir, "jinx-mitm-skip.txt"),
+        os.path.join(args.out_dir, "jinx-mitm-required.txt"),
+    )
+
     log("== summary ==")
-    log("filter:  %d rules (whitelist %d, blacklist %d)" % (wl_n + bl_n, wl_n, bl_n))
-    log("rewrite: %d rules (+%d degraded to host rules)" % (rw_n, len(degraded)))
-    log("mitm: skip %d, required-for-rewrite %d" % (mitm_n, mitm_req_n))
-    log("unsupported: %d" % skip_n)
+    log("filter:  %d rules (whitelist %d, blacklist %d) [validated %d]"
+        % (wl_n + bl_n, wl_n, bl_n, validated_n))
+    log("rewrite: %d rules (+%d degraded to host rules) [validated %d]"
+        % (rw_n, len(degraded), validated_rw))
+    log("mitm: skip %d, required %d (folded from %d, saved %d entries)"
+        % (mitm_n, len(mitm_req_set), mitm_req_n, mitm_folded_saved))
+    log("unsupported: %d (of which keyword/whitelist clashes: %d)" % (skip_n, kw_clashes))
     log("dedup: %d domain lines (%d wl, %d bl); %d rewrite dups" %
         (wl_dups + bl_dups, wl_dups, bl_dups, stats["dup_rewrite"]))
     log("url excluded by whitelist: %d, covered by domain rules: %d, generic path skipped: %d" %

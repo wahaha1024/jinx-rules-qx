@@ -122,6 +122,87 @@ def test_clean_lines_case_preserved():
     assert list(convert.clean_lines("GetAdverList")) == ["GetAdverList"]
 
 
+def test_mitm_suffix_groups():
+    hosts = {"a.x.com", "b.x.com", "c.x.com", "solo.y.com", "two.label"}
+    groups = convert.mitm_suffix_groups(hosts, min_group=3)
+    assert groups == {"x.com": ["a.x.com", "b.x.com", "c.x.com"]}
+
+
+def test_fold_mitm_hosts_requires_opt_in():
+    hosts = {"a.x.com", "b.x.com", "c.x.com"}
+    folded, removed = convert.fold_mitm_hosts(hosts, set(), [])
+    assert folded == hosts and removed == 0  # no opt-in -> nothing widens
+
+
+def test_fold_mitm_hosts_folds_when_asked():
+    hosts = {"a.x.com", "b.x.com", "c.x.com", "keep.y.com"}
+    folded, removed = convert.fold_mitm_hosts(hosts, set(), ["x.com"])
+    assert "*.x.com" in folded
+    assert "a.x.com" not in folded
+    assert "keep.y.com" in folded
+    assert removed == 3
+
+
+def test_fold_mitm_hosts_respects_skip():
+    hosts = {"a.x.com", "b.x.com", "c.x.com"}
+    folded, removed = convert.fold_mitm_hosts(hosts, {"b.x.com"}, ["x.com"])
+    assert removed == 0  # a must-not-decrypt host lives in the group
+    assert folded == hosts
+
+
+def test_host_from_regex_strips_port():
+    assert convert.host_from_regex(r"^https?://daijia\.kuaidadi\.com:443/gateway") is None or \
+        convert.host_from_regex(r"^https?://daijia\.kuaidadi\.com:443/gateway") == \
+        "daijia.kuaidadi.com"
+
+
+def test_validate_outputs_catches_duplicates(tmp_path):
+    f = tmp_path / "f.list"
+    f.write_text("host, a.com, reject\nhost, a.com, reject\n", encoding="utf-8")
+    rw = tmp_path / "r.conf"
+    rw.write_text("[rewrite_local]\n^x url reject-200\n", encoding="utf-8")
+    m1 = tmp_path / "m1.txt"; m1.write_text("a.com\n", encoding="utf-8")
+    m2 = tmp_path / "m2.txt"; m2.write_text("b.com\n", encoding="utf-8")
+    import pytest
+    with pytest.raises(SystemExit):
+        convert.validate_outputs(str(f), str(rw), str(m1), str(m2))
+
+
+def test_validate_outputs_catches_bad_order(tmp_path):
+    f = tmp_path / "f.list"
+    f.write_text("host, a.com, reject\nhost, b.com, direct\n", encoding="utf-8")
+    rw = tmp_path / "r.conf"
+    rw.write_text("[rewrite_local]\n^x url reject-200\n", encoding="utf-8")
+    m1 = tmp_path / "m1.txt"; m1.write_text("a.com\n", encoding="utf-8")
+    m2 = tmp_path / "m2.txt"; m2.write_text("b.com\n", encoding="utf-8")
+    import pytest
+    with pytest.raises(SystemExit):
+        convert.validate_outputs(str(f), str(rw), str(m1), str(m2))
+
+
+def test_validate_outputs_catches_bad_regex(tmp_path):
+    f = tmp_path / "f.list"
+    f.write_text("host, a.com, direct\n", encoding="utf-8")
+    rw = tmp_path / "r.conf"
+    rw.write_text("[rewrite_local]\n^https?://a.com/(unclosed url reject-200\n", encoding="utf-8")
+    m1 = tmp_path / "m1.txt"; m1.write_text("a.com\n", encoding="utf-8")
+    m2 = tmp_path / "m2.txt"; m2.write_text("b.com\n", encoding="utf-8")
+    import pytest
+    with pytest.raises(SystemExit):
+        convert.validate_outputs(str(f), str(rw), str(m1), str(m2))
+
+
+def test_validate_outputs_passes_clean(tmp_path):
+    f = tmp_path / "f.list"
+    f.write_text("host, a.com, direct\nhost, b.com, reject\n", encoding="utf-8")
+    rw = tmp_path / "r.conf"
+    rw.write_text("[rewrite_local]\n^https?://a\\.b/c url reject-dict\n", encoding="utf-8")
+    m1 = tmp_path / "m1.txt"; m1.write_text("a.com\n", encoding="utf-8")
+    m2 = tmp_path / "m2.txt"; m2.write_text("b.com\n", encoding="utf-8")
+    n_filter, n_rw = convert.validate_outputs(str(f), str(rw), str(m1), str(m2))
+    assert (n_filter, n_rw) == (2, 1)
+
+
 def test_whitelist_domain_match():
     wl = {"exact": {"a.com"}, "suffix": {"safe.com"}, "wildcard": {"cm-10-*.getui.com"},
           "keyword": set(), "ip": set()}

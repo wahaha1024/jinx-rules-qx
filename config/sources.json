@@ -10,6 +10,8 @@
 
   "single_filter_output": "jinx-adblock-qx.list",
 
+  "mitm_fold_suffixes": [],
+
   "extra_sources": [
     {
       "name": "fuck_apps_ad_sr",

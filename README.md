@@ -41,11 +41,14 @@ https://raw.githubusercontent.com/wahaha1024/jinx-rules-qx/main/generated/jinx-q
 |---|---|
 | `jinx-adblock-qx.list` | **主订阅文件**：合并后的域名分流（白名单 direct → 黑名单 reject） |
 | `generated/jinx-qx-rewrite.conf` | 可选：URL 正则重写（含 jinx URL 规则 + sgmodule URL Rewrite 段） |
-| `generated/jinx-mitm-required.txt` | 可选：**重写生效所需解密的域名**（约 330 条，按需折叠成通配） |
+| `generated/jinx-mitm-required.txt` | 可选：**重写生效所需解密的域名**（330 条，含 `.oneline.txt` 单行粘贴版） |
 | `generated/jinx-mitm-skip.txt` | 可选：MITM 排除域名参考 |
+| `generated/qx-config-snippet.conf` | 可选：可直接粘进 QX 配置的三段配置片段 |
 | `generated/unsupported.log` | 转换审计：被跳过的规则及原因 |
 
-生成文件头部带上游 commit 与生成时间，可直接溯源。
+生成文件头部带上游 commit 与生成时间，可直接溯源。**转换器自带自校验**：产物格式错误、规则重复、白名单顺序颠倒、正则编译失败都会让 CI 直接失败，不会把坏文件推给你。
+
+> 完整的架构与设计说明见 [docs/DESIGN.md](docs/DESIGN.md)。
 
 > sgmodule 的 `[Script]`（101 条远程脚本）、`[Body Rewrite]`（45 条 jq 改写）是 Surge/Shadowrocket 专属能力，QX 没有等价物，因此不会出现在生成文件中——已在 `unsupported.log` 列出。想要这部分效果请继续在 Surge/Shadowrocket 里启用该模块，两边并不冲突。
 
@@ -85,7 +88,10 @@ AdRules 的 `AND+NOT` 白名单豁免（`DOMAIN-WILDCARD,adx.*.com` 减掉 `*.du
 
 QX 的 MITM 已解密 HTTPS 时，下面这些开关能让广告拦截更彻底：
 
-1. **把 `generated/jinx-mitm-required.txt` 加进 `[mitm] hostname`**：不解密的话，`jinx-qx-rewrite.conf` 里针对 HTTPS 的规则一条都不会触发。330 条可自行折叠，例如 `*.mygolbs.com`、`*.if.qidian.com` 已自动合并；`api3-hl.qishui.com` 这类同后缀的可以手写一条 `*.qishui.com`。
+1. **把 `generated/jinx-mitm-required.txt` 加进 `[mitm] hostname`**（330 条）。不解密的域名，重写文件里针对 HTTPS 的规则一条都不会触发——这是「MITM 配了但广告还在」的头号原因。两种用法：
+   - 逐行复制 `jinx-mitm-required.txt`；
+   - 或直接抄 `jinx-mitm-required.oneline.txt`（已逗号连接的单行，可整段粘贴）。
+   想缩短清单，把后缀填进 `config/sources.json` 的 `mitm_fold_suffixes`（例如 `"qishui.com"`），转换器会把该后缀下 ≥3 个域名折叠成一条 `*.qishui.com`。默认不折叠——折叠会放宽解密范围，由你决定。
 2. **丢弃 QUIC，逼 App 走可拦截的 TCP**：HTTP/3 走 UDP 443 加密，MITM 证书对它无效，是广告规则漏网的主要原因。QX 官方配置项（写进 `[general]`）：
 
    ```ini
