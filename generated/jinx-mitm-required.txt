@@ -6,7 +6,7 @@
 # Add them to your [mitm] hostname (comma separated) for the rewrite file to fire.
 # Exact names only; hosts covered by jinx-mitm-skip.txt are already excluded.
 # Many entries can be folded into a single *.domain.com wildcard by hand.
-# Generated: 2026-09-21T07:41:25Z
+# Generated: 2026-09-21T07:42:05Z
 *.amap.com
 *.cainiao.com
 *.if.qidian.com
