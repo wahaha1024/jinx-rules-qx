@@ -17,6 +17,11 @@
       "url": "https://raw.githubusercontent.com/uxudjs/Shadowrocket/refs/heads/main/modules/fuck_apps_ad_sr.sgmodule",
       "include_rule_section": true,
       "include_url_rewrite": true
+    },
+    {
+      "name": "manual_extras",
+      "type": "manual",
+      "path": "config/manual_extras.list"
     }
   ],
 

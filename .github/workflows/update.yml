@@ -42,8 +42,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config http.version HTTP/1.1
-          git add jinx-adblock-qx.list generated/
-          if git diff --cached --quiet; then
+          git add jinx-adblock-qx.list generated/          if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No rule changes."
           else

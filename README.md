@@ -41,6 +41,7 @@ https://raw.githubusercontent.com/wahaha1024/jinx-rules-qx/main/generated/jinx-q
 |---|---|
 | `jinx-adblock-qx.list` | **主订阅文件**：合并后的域名分流（白名单 direct → 黑名单 reject） |
 | `generated/jinx-qx-rewrite.conf` | 可选：URL 正则重写（含 jinx URL 规则 + sgmodule URL Rewrite 段） |
+| `generated/jinx-mitm-required.txt` | 可选：**重写生效所需解密的域名**（约 330 条，按需折叠成通配） |
 | `generated/jinx-mitm-skip.txt` | 可选：MITM 排除域名参考 |
 | `generated/unsupported.log` | 转换审计：被跳过的规则及原因 |
 
@@ -60,6 +61,41 @@ QX 分流自上而下匹配。若同时使用 AdRules 等广告规则与本文�
 ```
 
 原则：**修正规则（direct 放行）永远排在最后**，才能覆盖前面规则的拦截。
+
+## 与 AdRules 的 jinx 模块对比
+
+[adrules.bittersweetx.dpdns.org 的 shared_log_jinx.sgmodule](https://adrules.bittersweetx.dpdns.org/modules/shared_log_jinx.sgmodule) 是同一个 jinx 上游的 Surge 手工精修版。用 `python tools/compare_adrules.py` 实测（当前上游数据）：
+
+| 维度 | AdRules 模块 | 本仓库 |
+|---|---|---|
+| 域名拦截 | 3686（exact + wildcard） | 3882，多 168 条 |
+| URL 重写 | 374 | 853，其中 315 条与 AdRules 重叠 |
+| 需解密域名 | 360 条（手工维护） | 330 条（`jinx-mitm-required.txt` 自动生成） |
+| 转换不了的部分 | — | QX 无 `AND+NOT` 原子规则能力 |
+
+AdRules 独有的三样东西，其中两样已补进本仓库：
+
+- **`wpad`、`sdkquic.e.qq.com`**：前者的裸名单标签、后者的 GDT QUIC 端点 jinx 上游没有——已加入 `config/manual_extras.list` 手工补充。
+- **端口容错**：AdRules 的重写模式都带 `(?::[0-9]+)?` 以匹配显式端口，本仓库的重写规则现已同样带上该可选端口组（此前只匹配默认端口）。
+- **`AND,((NETWORK,UDP),(DEST-PORT,443),(DOMAIN,mi.gdt.qq.com)),REJECT`** 这类 UDP 精准拦截：依赖 Surge 的 `extended-matching` 原子规则，**QX 分流没有对应语法**。QX 侧的做法见下一节。
+
+AdRules 的 `AND+NOT` 白名单豁免（`DOMAIN-WILDCARD,adx.*.com` 减掉 `*.duolingo.com` 等）同样是 Surge 专属能力。本仓库在**转换阶段**用白名单把对应黑名单规则直接排除，效果等价且不占运行时规则。
+
+## 已配置 MITM 还能优化什么
+
+QX 的 MITM 已解密 HTTPS 时，下面这些开关能让广告拦截更彻底：
+
+1. **把 `generated/jinx-mitm-required.txt` 加进 `[mitm] hostname`**：不解密的话，`jinx-qx-rewrite.conf` 里针对 HTTPS 的规则一条都不会触发。330 条可自行折叠，例如 `*.mygolbs.com`、`*.if.qidian.com` 已自动合并；`api3-hl.qishui.com` 这类同后缀的可以手写一条 `*.qishui.com`。
+2. **丢弃 QUIC，逼 App 走可拦截的 TCP**：HTTP/3 走 UDP 443 加密，MITM 证书对它无效，是广告规则漏网的主要原因。QX 官方配置项（写进 `[general]`）：
+
+   ```ini
+   udp_drop_list = QUIC
+   ```
+
+   只想拦 443 的 QUIC 就配 `udp_whitelist = 53, 80, 123, 443` 再加上面的 `udp_drop_list`。副作用是部分 App 首次连接慢半拍（QUIC 超时后回落 TCP），YouTube 等强依赖 QUIC 的服务可能受影响。
+3. **GDT/Pangle 的 QUIC 端点**：AdRules 用 `AND,((NETWORK,UDP),(DEST-PORT,443),(DOMAIN,mi.gdt.qq.com)),REJECT` 精准掐断，QX 没有 `AND` 语法；这些域名（`*.gdt.qq.com` 等）已被本仓库域名规则整体拦截，配合第 2 条的全局 QUIC 丢弃即可等效。
+4. **排除法维护 `[mitm]`**：`jinx-mitm-skip.txt` 里的 33 个域名（支付、系统验证、iCloud 等）务必排除，否则会出现验证码加载失败、支付异常。
+5. **叠加修正规则放最后**：与 AdRules 或其他去广告规则共用时，把 direct 放行类修正规则排在最后，才能覆盖前面的拦截。
 
 ## 转换规则
 

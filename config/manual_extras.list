@@ -1,0 +1,10 @@
+# Curated supplements for jinx-rules-qx.
+# QX-syntax lines merged into the generated output, ahead of converted rules.
+# Keep this file small and hand-checked: everything here is maintained by hand.
+#
+# --- gaps found by comparing with the AdRules jinx adapter ---
+# jinx ships "wpad" (a bare single-label name, not a real domain) which our
+# domain classifier rejects; add it back explicitly.
+host, wpad, reject
+# GDT SDK QUIC endpoint: AdRules blocks it, jinx has no "sdkquic.e.qq.com" entry.
+host, sdkquic.e.qq.com, reject

@@ -68,7 +68,29 @@ def test_url_parse_hostless_path():
 
 def test_url_regex_basic():
     r = convert.url_to_regex({"host": "a.b.com", "path": "/x/y"})
-    assert r == r"^https?://a\.b\.com/x/y(?:\?|$)"
+    assert r == r"^https?://a\.b\.com(?::\d+)?/x/y(?:\?|$)"
+
+
+def test_url_regex_port_tolerant():
+    r = convert.url_to_regex({"host": "r.inews.qq.com", "path": "/getNewsRemoteConfig"})
+    assert "(?::\\d+)?" in r
+    import re
+    assert re.search(r, "https://r.inews.qq.com/getNewsRemoteConfig")
+    assert re.search(r, "https://r.inews.qq.com:8443/getNewsRemoteConfig")
+
+
+def test_host_from_regex():
+    assert convert.host_from_regex(r"^https?://api\.b\.com(?::\d+)?/x") == "api.b.com"
+    assert convert.host_from_regex(r"^https?://.*api\.moji\.com/x") == "*api.moji.com"
+    assert convert.host_from_regex(r"^https?://tnc.*zijieapi\.com/x") == "tnc*zijieapi.com"
+    assert convert.host_from_regex(r"^https?://a\.b\.com/x") == "a.b.com"
+
+
+def test_in_mitm_skip():
+    entries = {"*.apple.com", "ccsp-egmas.sf-express.com", "tnc*zijieapi.com"}
+    assert convert.in_mitm_skip("a.b.apple.com", entries)
+    assert convert.in_mitm_skip("ccsp-egmas.sf-express.com", entries)
+    assert not convert.in_mitm_skip("other.com", entries)
 
 
 def test_url_regex_keeps_case():

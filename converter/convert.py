@@ -187,11 +187,51 @@ def load_extra_source(src):
             return fetch(url)
         except Exception as e:  # noqa: BLE001 - fall back to cache, then skip
             log("WARN extra source %s download failed (%s), trying local cache" % (src.get("name"), e))
+    if src.get("type") == "manual":
+        path = os.path.join(ROOT, src.get("path", ""))
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
+                return f.read()
+        return None
     cache = os.path.join(ROOT, "tools", src.get("name", "extra") + ".sgmodule")
     if os.path.exists(cache):
         with open(cache, "r", encoding="utf-8-sig", errors="replace") as f:
             return f.read()
     return None
+
+
+def merge_manual_extras(text, name, wl, bl, extra_rewrites, extra_bad):
+    """Parse a curated file of QX-syntax lines:
+       host,<value>,<reject|direct> / host-suffix,... / host-keyword,... / ip-cidr,...
+       ^regex url <action>    (rewrite rule, inserted ahead of converted ones)
+    """
+    kind_map = {"host": "exact", "host-suffix": "suffix", "host-wildcard": "wildcard",
+                "host-keyword": "keyword", "ip-cidr": "ip"}
+    n_dom = n_rw = 0
+    for raw in clean_lines(text):
+        if raw.startswith("^"):
+            parts = raw.split()
+            if len(parts) >= 3 and parts[1] == "url":
+                extra_rewrites.append({"regex": parts[0], "raw": raw, "action": parts[2]})
+                n_rw += 1
+            else:
+                extra_bad.append(("malformed manual rewrite rule: " + raw, name))
+            continue
+        parts = [p.strip() for p in raw.split(",")]
+        if len(parts) < 3:
+            extra_bad.append(("malformed manual rule: " + raw, name))
+            continue
+        kind = kind_map.get(parts[0].lower())
+        if kind is None:
+            extra_bad.append(("unknown manual rule type: " + raw, name))
+            continue
+        val, pol = parts[1].lower(), parts[2].lower()
+        if pol not in ("reject", "direct"):
+            extra_bad.append(("unsupported manual policy (%s): %s" % (pol, raw), name))
+            continue
+        (wl if pol == "direct" else bl)[kind].add(val)
+        n_dom += 1
+    return n_dom, n_rw
 
 
 # ---------------------------------------------------------------- domain classification
@@ -270,10 +310,90 @@ def parse_url(line):
 
 
 RE_SPECIAL = set(".^$*+?()[]{}|\\")
+PORT_TOL = "(?::\\d+)?"
 
 
 def re_lit(ch):
     return "\\" + ch if ch in RE_SPECIAL else ch
+
+
+def with_port_tolerance(rx):
+    """Insert an optional port group right after the host, so patterns also match
+    URLs that carry an explicit port (https://host:8443/...)."""
+    prefix = "^https?://"
+    if not rx.startswith(prefix):
+        return rx
+    rest, i, in_class, host_end = rx[len(prefix):], 0, False, None
+    while i < len(rest):
+        c = rest[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == "[":
+            in_class = True
+        elif c == "]":
+            in_class = False
+        elif not in_class and c in "/?#":
+            host_end = i
+            break
+        i += 1
+    if host_end is None:
+        return rx
+    host = rest[:host_end]
+    if ":" in host or "(" in host:  # already carries a port / port group
+        return rx
+    return prefix + host + PORT_TOL + rest[host_end:]
+
+
+def scheme_prefix(rx):
+    """Return (matched_prefix, rest) for the three scheme forms we emit."""
+    for p in ("^https?://", "^https://", "^http://"):
+        if rx.startswith(p):
+            return p, rx[len(p):]
+    return None, None
+
+
+def host_from_regex(rx):
+    """Extract the host part of a generated rewrite pattern, keeping wildcards in
+    QX-friendly form (.*/<[^/]*> -> *, <[^/]> -> ?). None if not extractable."""
+    prefix, rest = scheme_prefix(rx)
+    if prefix is None:
+        return None
+    rest = rest.replace("(?::\\d+)?", "")
+    i, in_class, end = 0, False, None
+    while i < len(rest):
+        c = rest[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == "[":
+            in_class = True
+        elif c == "]":
+            in_class = False
+        elif not in_class and c in "/?#":
+            end = i
+            break
+        i += 1
+    if end is None:
+        return None
+    host = rest[:end]
+    for a, b in (("\\.", "."), ("\\-", "-"), ("\\_", "_")):
+        host = host.replace(a, b)
+    host = host.replace(".*", "*").replace("[^/]*", "*").replace("[^/]", "?").replace("\\", "")
+    if not host or "(" in host or ")" in host or "[" in host or "]" in host:
+        return None
+    return host
+
+
+def in_mitm_skip(host, entries):
+    for e in entries:
+        if e.startswith("*."):
+            base = e[2:]
+            if host == base or host.endswith("." + base):
+                return True
+        elif host == e or host_wildcard_match(host, e):
+            return True
+    return False
 
 
 def escape_host(h):
@@ -301,7 +421,7 @@ def url_to_regex(u):
     if not path or path == "/":
         return None
     tail = "" if path.endswith("*") else "(?:\\?|$)"
-    return "^https?://%s%s%s" % (escape_host(u["host"]), escape_path(path), tail)
+    return with_port_tolerance("^https?://%s%s%s" % (escape_host(u["host"]), escape_path(path), tail))
 
 
 def build_url_rules(files, paths):
@@ -423,6 +543,20 @@ def write_mitm(path, commit, entries):
     return len(entries)
 
 
+def write_mitm_required(path, commit, hosts):
+    lines = header([
+        "Upstream commit: %s" % commit,
+        "Hosts that jinx-qx-rewrite.conf needs decrypted to intercept over HTTPS.",
+        "Add them to your [mitm] hostname (comma separated) for the rewrite file to fire.",
+        "Exact names only; hosts covered by jinx-mitm-skip.txt are already excluded.",
+        "Many entries can be folded into a single *.domain.com wildcard by hand.",
+    ])
+    lines += sorted(hosts)
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines) + "\n")
+    return len(hosts)
+
+
 def write_unsupported(path, skips):
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         for reason, src in skips:
@@ -472,7 +606,12 @@ def main(argv=None):
         if text is None:
             log("WARN extra source %s unavailable, skipped" % name)
             continue
-        if src.get("type", "sgmodule") != "sgmodule":
+        stype = src.get("type", "sgmodule")
+        if stype == "manual":  # curated local file, our own QX-syntax lines
+            n_dom, n_rw = merge_manual_extras(text, name, wl, bl, extra_rewrites, extra_bad)
+            sg_stats.append("%s: +%d domain, +%d rewrite rules" % (name, n_dom, n_rw))
+            continue
+        if stype != "sgmodule":
             log("WARN extra source %s: unknown type, skipped" % name)
             continue
         EXTRA_NOTES.append("%s (%s)" % (name, src.get("url", "local")))
@@ -595,17 +734,27 @@ def main(argv=None):
 
     os.makedirs(args.out_dir, exist_ok=True)
     # The single root-level filter file is the primary deliverable (subscribed in QX);
-    # generated/ holds the optional extras (rewrite / mitm skip / audit log).
+    # generated/ holds the optional extras (rewrite / mitm skip / mitm required / audit log).
     single_path = os.path.join(ROOT, cfg.get("single_filter_output", "jinx-adblock-qx.list"))
     wl_n, bl_n = write_filter(single_path, commit, wl, bl)
     rw_n = write_rewrite(os.path.join(args.out_dir, "jinx-qx-rewrite.conf"), commit, rewrite_rules)
     mitm_n = write_mitm(os.path.join(args.out_dir, "jinx-mitm-skip.txt"), commit, mitm)
+
+    # hosts the rewrite file needs decrypted (exclude the ones jinx says to skip)
+    mitm_hosts = set()
+    for r in rewrite_rules:
+        h = host_from_regex(r["regex"])
+        if h and not in_mitm_skip(h, mitm):
+            mitm_hosts.add(h)
+    mitm_req_n = write_mitm_required(
+        os.path.join(args.out_dir, "jinx-mitm-required.txt"), commit, mitm_hosts)
+
     skip_n = write_unsupported(os.path.join(args.out_dir, "unsupported.log"), skips)
 
     log("== summary ==")
     log("filter:  %d rules (whitelist %d, blacklist %d)" % (wl_n + bl_n, wl_n, bl_n))
     log("rewrite: %d rules (+%d degraded to host rules)" % (rw_n, len(degraded)))
-    log("mitm skip: %d" % mitm_n)
+    log("mitm: skip %d, required-for-rewrite %d" % (mitm_n, mitm_req_n))
     log("unsupported: %d" % skip_n)
     log("dedup: %d domain lines (%d wl, %d bl); %d rewrite dups" %
         (wl_dups + bl_dups, wl_dups, bl_dups, stats["dup_rewrite"]))
