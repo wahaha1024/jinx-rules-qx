@@ -1,0 +1,109 @@
+"""Unit tests for the converter's parsing and classification logic."""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "converter"))
+
+import convert  # noqa: E402
+
+
+def test_classify_exact():
+    assert convert.classify_domain("ads.example.com") == ("exact", "ads.example.com")
+
+
+def test_classify_suffix_wildcard():
+    assert convert.classify_domain("*.example.com") == ("suffix", "example.com")
+
+
+def test_classify_mid_wildcard():
+    kind, val = convert.classify_domain("p*-ad.adkwai.com")
+    assert kind == "wildcard"
+    assert val == "p*-ad.adkwai.com"
+
+
+def test_classify_url_line():
+    assert convert.classify_domain("https://example.com/ad.js")[0] == "url"
+    assert convert.classify_domain("http://a.b/c?d")[0] == "url"
+
+
+def test_classify_path_line():
+    assert convert.classify_domain("/api/ad")[0] == "path"
+
+
+def test_classify_ip():
+    assert convert.classify_domain("1.2.3.4") == ("ip", "1.2.3.4")
+    assert convert.classify_domain("10.0.0.0/8") == ("ip", "10.0.0.0/8")
+
+
+def test_classify_trailing_dot():
+    assert convert.classify_domain("zalo-ads-480-td.") == ("skip", "zalo-ads-480-td")
+
+
+def test_classify_invalid():
+    assert convert.classify_domain("wpad")[0] == "skip"
+    assert convert.classify_domain(".splash")[0] == "skip"
+
+
+def test_url_parse_full():
+    u = convert.parse_url("https://www.dongchedi.com/motor/ad")
+    assert u == {"host": "www.dongchedi.com", "path": "/motor/ad"}
+
+
+def test_url_parse_query_only():
+    u = convert.parse_url("https://ynuf.aliapp.org/savewb.json?")
+    assert u == {"host": "ynuf.aliapp.org", "path": "/savewb.json"}
+
+
+def test_url_parse_wildcard_host():
+    u = convert.parse_url("https://img*.360buyimg.com/jddjadvertise")
+    assert u["host"] == "img*.360buyimg.com"
+    assert u["path"] == "/jddjadvertise"
+
+
+def test_url_parse_hostless_path():
+    u = convert.parse_url("/splash")
+    assert u == {"host": "", "path": "/splash"}
+
+
+def test_url_regex_basic():
+    r = convert.url_to_regex({"host": "a.b.com", "path": "/x/y"})
+    assert r == r"^https?://a\.b\.com/x/y(?:\?|$)"
+
+
+def test_url_regex_keeps_case():
+    r = convert.url_to_regex({"host": "a.b.com", "path": "/getAdverList"})
+    assert "/getAdverList" in r
+
+
+def test_url_regex_empty_path_degrades():
+    assert convert.url_to_regex({"host": "a.b.com", "path": ""}) is None
+    assert convert.url_to_regex({"host": "a.b.com", "path": "/"}) is None
+
+
+def test_url_regex_wildcard_path():
+    r = convert.url_to_regex({"host": "api.dongdianqiu.com", "path": "/*/startup"})
+    assert ".*" in r and r.endswith("/startup(?:\\?|$)")
+
+
+def test_escape_host_mid_wildcard():
+    assert convert.escape_host("p*-ad.adkwai.com") == r"p[^/]*\-ad\.adkwai\.com".replace("\\-", "-") \
+        or convert.escape_host("p*-ad.adkwai.com") == r"p[^/]*-ad\.adkwai\.com"
+
+
+def test_clean_lines():
+    text = "# c\n\n  ads.com  \n; semi\nx.com"
+    assert list(convert.clean_lines(text)) == ["ads.com", "x.com"]
+
+
+def test_clean_lines_case_preserved():
+    assert list(convert.clean_lines("GetAdverList")) == ["GetAdverList"]
+
+
+def test_whitelist_domain_match():
+    wl = {"exact": {"a.com"}, "suffix": {"safe.com"}, "wildcard": {"cm-10-*.getui.com"}}
+    dw, _ = convert.make_whitelist_predicates(wl, [])
+    assert dw("a.com")
+    assert dw("sub.safe.com")
+    assert dw("cm-10-77.getui.com")
+    assert not dw("b.com")

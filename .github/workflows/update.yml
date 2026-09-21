@@ -1,0 +1,58 @@
+name: Update QX rules
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "converter/**"
+      - "config/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-rules
+  cancel-in-progress: false
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run converter
+        run: python converter/convert.py
+
+      - name: Run tests
+        run: |
+          python -m pip install --quiet pytest
+          python -m pytest tests/ -q
+
+      - name: Commit generated files
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add generated/
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No rule changes."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git commit -m "update generated rules ($(date -u +%FT%TZ))"
+            git push
+          fi
+
+      - name: Report unsupported rules
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          n=$(wc -l < generated/unsupported.log)
+          echo "::notice::发现 $n 条无法安全转换的规则，详见 generated/unsupported.log"
+          head -20 generated/unsupported.log

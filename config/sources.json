@@ -1,0 +1,39 @@
+{
+  "repository": "VME98/jinx-rules",
+  "branch": "master",
+
+  "safe_mode": true,
+  "deduplicate": true,
+  "convert_generic_path": false,
+  "convert_unknown_url": false,
+  "convert_regex": false,
+
+  "sources": {
+    "domain": {
+      "blacklist": [
+        "rules/blacklist.txt",
+        "rules/blacklist_wildcard.txt",
+        "rules/domain_blacklist.txt"
+      ],
+      "whitelist": [
+        "rules/whitelist.txt",
+        "rules/whitelist_wildcard.txt",
+        "rules/domain_whitelist.txt"
+      ]
+    },
+    "url": {
+      "blacklist": [
+        "rules/url_blacklist.txt",
+        "rules/url_blacklist_paths.txt",
+        "rules/url_blacklist_domain_paths.txt"
+      ],
+      "whitelist": [
+        "rules/url_whitelist.txt",
+        "rules/url_whitelist_paths.txt"
+      ]
+    },
+    "mitm_skip": [
+      "rules/mitm_skip_domains.txt"
+    ]
+  }
+}
