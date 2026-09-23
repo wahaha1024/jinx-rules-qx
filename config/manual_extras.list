@@ -27,6 +27,10 @@ host, api-access.pangolin-sdk-toutiao-b.com, direct
 # rules cannot be expressed in QX; whole-host reject is the closest equivalent).
 host, webcast-open.douyin.com, reject
 host, sdkquic.e.qq.com, reject
+# GitHub must go through the user's proxy policy, not direct: these explicit
+# direct entries (upstream whitelist) would shadow proxy rules that come later.
+# Filter-output exclusion via OUTPUT_EXCLUDE below; direct entries removed here
+# so the converter's whitelist does not carry them into jinx-adblock-qx.list.
 # GDT/Pangle ad endpoints (AdRules uses reject-dict / reject-200 body rewrites;
 # the dict/200 distinction is kept where AdRules had it). One regex per host so
 # the converter can extract each hostname into jinx-mitm-required.txt.

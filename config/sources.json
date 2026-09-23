@@ -12,6 +12,12 @@
 
   "mitm_fold_suffixes": [],
 
+  "output_exclude": {
+    "reason": "GitHub must follow the user's proxy policy; direct entries here would shadow later proxy rules",
+    "exact": ["github.com", "raw.githubusercontent.com", "githubusercontent.com"],
+    "suffix": ["github.com", "githubusercontent.com"]
+  },
+
   "extra_sources": [
     {
       "name": "fuck_apps_ad_sr",

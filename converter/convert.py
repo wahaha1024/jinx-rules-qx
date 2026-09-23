@@ -784,6 +784,27 @@ def main(argv=None):
     domain_whitelisted, url_whitelisted = make_whitelist_predicates(
         wl, build_url_rules(files, cfg["sources"]["url"]["whitelist"])[0])
 
+    # drop user-designated domains from the filter output entirely (e.g. GitHub,
+    # which should follow the user's proxy policy instead of upstream's direct)
+    out_excl = cfg.get("output_exclude", {})
+    excl_exact = set(out_excl.get("exact", []))
+    excl_suffix = set(out_excl.get("suffix", []))
+    out_excluded = 0
+
+    def _output_excluded(v):
+        if v in excl_exact:
+            return True
+        return any(v == s or v.endswith("." + s) for s in excl_suffix)
+
+    for kind in ("exact", "suffix", "wildcard", "keyword"):
+        keep = set()
+        for v in wl[kind]:
+            if _output_excluded(v):
+                out_excluded += 1
+            else:
+                keep.add(v)
+        wl[kind] = keep
+
     # blacklist domains suppressed by whitelist
     bl_removed_by_wl = 0
     for kind in ("exact", "suffix", "wildcard", "keyword", "ip"):
@@ -928,6 +949,7 @@ def main(argv=None):
         (wl_dups + bl_dups, wl_dups, bl_dups, stats["dup_rewrite"]))
     log("url excluded by whitelist: %d, covered by domain rules: %d, generic path skipped: %d" %
         (stats["wl_url_excluded"], stats["dead_domain_covered"], stats["generic_path"]))
+    log("filter output excluded by output_exclude: %d" % out_excluded)
     log("extra sources: " + ("; ".join(sg_stats) if sg_stats else "none"))
     return 0
 

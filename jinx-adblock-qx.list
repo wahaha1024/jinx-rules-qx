@@ -3,7 +3,7 @@
 # Merged source: fuck_apps_ad_sr (https://raw.githubusercontent.com/uxudjs/Shadowrocket/refs/heads/main/modules/fuck_apps_ad_sr.sgmodule)
 # Upstream commit: 3fd15f94fedc
 # Whitelist (direct) rules come first on purpose; QX matches top-down.
-# Generated: 2026-09-23T01:28:04Z
+# Generated: 2026-09-23T02:17:52Z
 # ==== WHITELIST (direct) ====
 host, 95516.com, direct
 host, ab.ke.com, direct
@@ -109,8 +109,6 @@ host, gecko.zijieapi.com, direct
 host, get.shouji.sogou.com, direct
 host, gguser-mtop.cainiao.com, direct
 host, gia.jd.com, direct
-host, github.com, direct
-host, githubusercontent.com, direct
 host, gitlab.com, direct
 host, gmail.com, direct
 host, grs.dbankcloud.asia, direct
@@ -218,7 +216,6 @@ host, push.apple.com, direct
 host, push.coolapk.com, direct
 host, qnmob3.doubanio.com, direct
 host, qq.com, direct
-host, raw.githubusercontent.com, direct
 host, rdelivery.qq.com, direct
 host, referee.xiaohongshu.com, direct
 host, report.tencentmusic.com, direct
@@ -310,8 +307,6 @@ host-suffix, duolingo.com, direct
 host-suffix, gccdn.net, direct
 host-suffix, gcloud.qq.com, direct
 host-suffix, gcloudcs.com, direct
-host-suffix, github.com, direct
-host-suffix, githubusercontent.com, direct
 host-suffix, gsdk.qq.com, direct
 host-suffix, hdlvcloud.ks-cdn.com, direct
 host-suffix, icloud.com, direct

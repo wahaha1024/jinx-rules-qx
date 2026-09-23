@@ -58,12 +58,14 @@ QX 分流自上而下匹配。若同时使用 AdRules 等广告规则与本文�
 
 ```ini
 [filter_remote]
-; 1. 其他去广告规则（如有）
-; 2. 本文件
+; 1. 本文件（自带 direct 放行，须先于其他广告规则）
+; 2. 其他去广告规则（如有）
 ; 3. 规则修正 / 去广告修正规则（放最后）
 ```
 
 原则：**修正规则（direct 放行）永远排在最后**，才能覆盖前面规则的拦截。
+
+> GitHub 域名默认**不在**本文件的放行名单里（`output_exclude` 已剔除），这样 GitHub 走你自己的代理分流；若你希望 GitHub 直连，自行加一条 `host-suffix, github.com, direct` 到 `[filter_local]` 即可。
 
 ## 与 AdRules 的 jinx 模块对比
 
