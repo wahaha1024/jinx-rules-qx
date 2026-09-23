@@ -6,15 +6,15 @@
 # Add them to your [mitm] hostname (comma separated) for the rewrite file to fire.
 # Domains from jinx-mitm-skip.txt are already excluded.
 # A comma-joined paste copy sits in jinx-mitm-required.oneline.txt.
-# Generated: 2026-09-23T01:07:31Z
+# Generated: 2026-09-23T01:27:44Z
 # Optional: to shorten the list, add any of these to
 # config/sources.json -> mitm_fold_suffixes, which folds the group
 # into a single *.suffix entry (widens decryption to all subdomains):
-#   qq.com                   13 hosts (3gimg.qq.com, 4gimg.map.qq.com, ...)
-#   baidu.com                8 hosts (appwk.baidu.com, c.tieba.baidu.com, ...)
+#   qq.com                   18 hosts (3gimg.qq.com, 4gimg.map.qq.com, ...)
 #   com.cn                   8 hosts (3pp.starbucks.com.cn, api.vistopia.com.cn, ...)
-#   kugou.com                7 hosts (activity.kugou.com, bjacshow.kugou.com, ...)
+#   baidu.com                8 hosts (appwk.baidu.com, c.tieba.baidu.com, ...)
 #   qishui.com               7 hosts (api.qishui.com, api3-hl.qishui.com, ...)
+#   kugou.com                7 hosts (activity.kugou.com, bjacshow.kugou.com, ...)
 #   163.com                  6 hosts (appconf.mail.163.com, client.mail.163.com, ...)
 *.amap.com
 *.cainiao.com
@@ -44,6 +44,9 @@ alibaba.com
 alicdn.com
 amap-aos-info-nogw.amap.com
 amap.com
+api-access.pangolin-sdk-toutiao-b.com
+api-access.pangolin-sdk-toutiao.com
+api-access.pangolin-sdk-toutiao1.com
 api-fouth-mem.huazhu.com
 api-hl.amemv.com
 api-one-wscn.awtmt.com
@@ -239,6 +242,7 @@ mdike.alicdn.com
 mediadata.api.weibo.com
 member.alipan.com
 mercury-gateway.ixiaochuan.cn
+mi.gdt.qq.com
 mime.baidu.com
 minicap.caocaokeji.cn
 miniprogram.ishansong.com
@@ -318,6 +322,9 @@ upos-sz-302ppio.bilivideo.com
 upos-sz-mirrorcos.bilivideo.com
 upos-sz-static.bilivideo.com
 upos-sz-staticcos.bilivideo.com
+v.gdt.qq.com
+v2mi.gdt.qq.com
+v3.gdt.qq.com
 vdn*.vzuu.com
 vdn3.vzuu.com
 vdn6.vzuu.com
@@ -330,6 +337,7 @@ wbapp.uve.weibo.com
 wechat-api.i-xiaoma.com.cn
 weibointl.api.weibo.cn
 welfare.kugou.com
+win.gdt.qq.com
 wmapi.meituan.com
 www.cls.cn
 www.dongchedi.com

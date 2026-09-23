@@ -28,7 +28,16 @@ host, api-access.pangolin-sdk-toutiao-b.com, direct
 host, webcast-open.douyin.com, reject
 host, sdkquic.e.qq.com, reject
 # GDT/Pangle ad endpoints (AdRules uses reject-dict / reject-200 body rewrites;
-# the dict/200 distinction is kept where AdRules had it).
-^https\:\/\/api\-access\.pangolin\-sdk\-toutiao(?:1|\-b)?\.com(?::\d+)?/api/ad/union/sdk/get_ads(?:\?|$) url reject-dict
-^https\:\/\/api\-access\.pangolin\-sdk\-toutiao(?:1|\-b)?\.com(?::\d+)?/api/ad/union/server_bidding/pre_fetch(?:\?|$) url reject-200
-^https\:\/\/(?:mi|v2mi|win|v|v3)\.gdt\.qq\.com(?::\d+)?/gdt_mview\.fcg(?:\?|$) url reject-dict
+# the dict/200 distinction is kept where AdRules had it). One regex per host so
+# the converter can extract each hostname into jinx-mitm-required.txt.
+^https?://api-access\.pangolin-sdk-toutiao\.com(?::\d+)?/api/ad/union/sdk/get_ads(?:\?|$) url reject-dict
+^https?://api-access\.pangolin-sdk-toutiao1\.com(?::\d+)?/api/ad/union/sdk/get_ads(?:\?|$) url reject-dict
+^https?://api-access\.pangolin-sdk-toutiao-b\.com(?::\d+)?/api/ad/union/sdk/get_ads(?:\?|$) url reject-dict
+^https?://api-access\.pangolin-sdk-toutiao\.com(?::\d+)?/api/ad/union/server_bidding/pre_fetch(?:\?|$) url reject-200
+^https?://api-access\.pangolin-sdk-toutiao1\.com(?::\d+)?/api/ad/union/server_bidding/pre_fetch(?:\?|$) url reject-200
+^https?://api-access\.pangolin-sdk-toutiao-b\.com(?::\d+)?/api/ad/union/server_bidding/pre_fetch(?:\?|$) url reject-200
+^https?://mi\.gdt\.qq\.com(?::\d+)?/gdt_mview\.fcg(?:\?|$) url reject-dict
+^https?://v2mi\.gdt\.qq\.com(?::\d+)?/gdt_mview\.fcg(?:\?|$) url reject-dict
+^https?://win\.gdt\.qq\.com(?::\d+)?/gdt_mview\.fcg(?:\?|$) url reject-dict
+^https?://v\.gdt\.qq\.com(?::\d+)?/gdt_mview\.fcg(?:\?|$) url reject-dict
+^https?://v3\.gdt\.qq\.com(?::\d+)?/gdt_mview\.fcg(?:\?|$) url reject-dict
