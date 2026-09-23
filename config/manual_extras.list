@@ -8,3 +8,27 @@
 host, wpad, reject
 # GDT SDK QUIC endpoint: AdRules blocks it, jinx has no "sdkquic.e.qq.com" entry.
 host, sdkquic.e.qq.com, reject
+
+# --- precision layer ported from the AdRules jinx adapter (shared_log_jinx.sgmodule) ---
+# 9 ad-SDK hosts get connection-level DIRECT so SDK settings/stats keep working;
+# only their ad endpoints are killed via the rewrite rules below (HTTPS needs MITM).
+# These exact-direct entries also suppress the matching jinx blacklist entries
+# during conversion (whitelist suppression), so no reject rule shadows them.
+host, sdk.e.qq.com, direct
+host, mi.gdt.qq.com, direct
+host, v2mi.gdt.qq.com, direct
+host, win.gdt.qq.com, direct
+host, v.gdt.qq.com, direct
+host, v3.gdt.qq.com, direct
+host, api-access.pangolin-sdk-toutiao.com, direct
+host, api-access.pangolin-sdk-toutiao1.com, direct
+host, api-access.pangolin-sdk-toutiao-b.com, direct
+# AdRules ALSO rejects these two UDP/QUIC-heavy hosts outright (its AND,NETWORK,UDP
+# rules cannot be expressed in QX; whole-host reject is the closest equivalent).
+host, webcast-open.douyin.com, reject
+host, sdkquic.e.qq.com, reject
+# GDT/Pangle ad endpoints (AdRules uses reject-dict / reject-200 body rewrites;
+# the dict/200 distinction is kept where AdRules had it).
+^https\:\/\/api\-access\.pangolin\-sdk\-toutiao(?:1|\-b)?\.com(?::\d+)?/api/ad/union/sdk/get_ads(?:\?|$) url reject-dict
+^https\:\/\/api\-access\.pangolin\-sdk\-toutiao(?:1|\-b)?\.com(?::\d+)?/api/ad/union/server_bidding/pre_fetch(?:\?|$) url reject-200
+^https\:\/\/(?:mi|v2mi|win|v|v3)\.gdt\.qq\.com(?::\d+)?/gdt_mview\.fcg(?:\?|$) url reject-dict

@@ -80,7 +80,8 @@ AdRules 独有的三样东西，其中两样已补进本仓库：
 
 - **`wpad`、`sdkquic.e.qq.com`**：前者的裸名单标签、后者的 GDT QUIC 端点 jinx 上游没有——已加入 `config/manual_extras.list` 手工补充。
 - **端口容错**：AdRules 的重写模式都带 `(?::[0-9]+)?` 以匹配显式端口，本仓库的重写规则现已同样带上该可选端口组（此前只匹配默认端口）。
-- **`AND,((NETWORK,UDP),(DEST-PORT,443),(DOMAIN,mi.gdt.qq.com)),REJECT`** 这类 UDP 精准拦截：依赖 Surge 的 `extended-matching` 原子规则，**QX 分流没有对应语法**。QX 侧的做法见下一节。
+- **GDT/Pangle SDK 精准处理**（已移植）：AdRules 让 9 个广告 SDK 域名（`sdk.e.qq.com`、`mi.gdt.qq.com`、`api-access.pangolin-sdk-toutiao*.com` 等）连接层 DIRECT，仅用重写拦截其广告端点；并整体拒绝 `sdkquic.e.qq.com`、`webcast-open.douyin.com` 两个 QUIC/UDP 重度域名。这些已进入 `config/manual_extras.list` 精准处理层：分流文件里 9 条 `host, ..., direct`（在拦截规则之前生效），重写文件里 3 条 GDT/Pangle 广告端点拦截（`get_ads`、`pre_fetch`、`gdt_mview.fcg`，HTTPS 生效需 MITM）。
+- **`AND,((NETWORK,UDP),(DEST-PORT,443),(DOMAIN,mi.gdt.qq.com)),REJECT`** 这类按"域名+协议+端口"的 UDP 精准拦截：依赖 Surge 的 `extended-matching` 原子规则，**QX 分流没有对应语法**。QX 侧的做法见下一节。
 
 AdRules 的 `AND+NOT` 白名单豁免（`DOMAIN-WILDCARD,adx.*.com` 减掉 `*.duolingo.com` 等）同样是 Surge 专属能力。本仓库在**转换阶段**用白名单把对应黑名单规则直接排除，效果等价且不占运行时规则。
 
@@ -99,7 +100,7 @@ QX 的 MITM 已解密 HTTPS 时，下面这些开关能让广告拦截更彻底�
    ```
 
    只想拦 443 的 QUIC 就配 `udp_whitelist = 53, 80, 123, 443` 再加上面的 `udp_drop_list`。副作用是部分 App 首次连接慢半拍（QUIC 超时后回落 TCP），YouTube 等强依赖 QUIC 的服务可能受影响。
-3. **GDT/Pangle 的 QUIC 端点**：AdRules 用 `AND,((NETWORK,UDP),(DEST-PORT,443),(DOMAIN,mi.gdt.qq.com)),REJECT` 精准掐断，QX 没有 `AND` 语法；这些域名（`*.gdt.qq.com` 等）已被本仓库域名规则整体拦截，配合第 2 条的全局 QUIC 丢弃即可等效。
+ 3. **GDT/Pangle 的 QUIC 端点**：AdRules 用 `AND,((NETWORK,UDP),(DEST-PORT,443),(DOMAIN,mi.gdt.qq.com)),REJECT` 精准掐断，QX 没有 `AND` 语法。本仓库已移植其精准处理层（`config/manual_extras.list`）：9 个 SDK 域名连接层 direct、广告端点走重写拦截，`sdkquic.e.qq.com` / `webcast-open.douyin.com` 整体拒绝；再配合第 2 条的全局 QUIC 丢弃即可等效。
 4. **排除法维护 `[mitm]`**：`jinx-mitm-skip.txt` 里的 33 个域名（支付、系统验证、iCloud 等）务必排除，否则会出现验证码加载失败、支付异常。
 5. **叠加修正规则放最后**：与 AdRules 或其他去广告规则共用时，把 direct 放行类修正规则排在最后，才能覆盖前面的拦截。
 

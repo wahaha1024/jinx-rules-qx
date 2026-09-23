@@ -291,10 +291,11 @@ host, 1500020991.vodplayer.wxamedia.com, reject
 | 域名拦截 | 3686 | 4225 | 本仓库多 168 条（含 sgmodule 合并的 50 条与通配） |
 | URL 重写 | 374 | 853 | 其中 315 条双方重叠 |
 | 需解密域名 | 360（手工） | 330（自动生成） | 311 条完全一致 |
-| UDP/QUIC 精准拦截 | 8 条 `AND` 规则 | 无 | QX 无 `AND` 语法，改由全局 `udp_drop_list = QUIC` 覆盖 |
+| UDP/QUIC 精准拦截 | 8 条 `AND` 规则 | 移植：2 条整体拒绝 + 3 条 GDT/Pangle 端点重写 | QX 无 `AND` 语法；SDK 域名整体拒绝，端点用 rewrite 补刀，剩余由全局 `udp_drop_list = QUIC` 覆盖 |
 | 白名单豁免 | `AND(...NOT...)` 原子规则 | 转换阶段排除 | 效果等价，且不占运行时规则 |
+| GDT/Pangle SDK 放行 | 9 域名 DIRECT + 端点拦截 | 已移植（`manual_extras.list` 精准处理层） | 等价：连接层 direct，广告端点 rewrite 拦截 |
 
-AdRules 独有而我们已补齐的：端口容错 `(?::\d+)?`、`wpad`、`sdkquic.e.qq.com`。
+AdRules 独有而我们已补齐的：端口容错 `(?::\d+)?`、`wpad`、`sdkquic.e.qq.com`、GDT/Pangle SDK 放行与端点重写。
 
 ---
 

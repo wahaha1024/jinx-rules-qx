@@ -3,7 +3,7 @@
 # Merged source: fuck_apps_ad_sr (https://raw.githubusercontent.com/uxudjs/Shadowrocket/refs/heads/main/modules/fuck_apps_ad_sr.sgmodule)
 # Upstream commit: 3fd15f94fedc
 # Whitelist (direct) rules come first on purpose; QX matches top-down.
-# Generated: 2026-09-22T20:58:35Z
+# Generated: 2026-09-23T01:05:45Z
 # ==== WHITELIST (direct) ====
 host, 95516.com, direct
 host, ab.ke.com, direct
@@ -25,6 +25,9 @@ host, anticheatexpert.com, direct
 host, apd-pcdnwxlogin.teg.tencent-cloud.net, direct
 host, apd-pcdnwxnat.teg.tencent-cloud.net, direct
 host, apd-pcdnwxstat.teg.tencent-cloud.net, direct
+host, api-access.pangolin-sdk-toutiao-b.com, direct
+host, api-access.pangolin-sdk-toutiao.com, direct
+host, api-access.pangolin-sdk-toutiao1.com, direct
 host, api-mayi.django.t.taobao.com, direct
 host, api-phonekey.gyyx.cn, direct
 host, api-unionid.meituan.com, direct
@@ -168,6 +171,7 @@ host, mail.qq.com, direct
 host, mars.jd.com, direct
 host, mdap.alipay.com, direct
 host, mesu.apple.com, direct
+host, mi.gdt.qq.com, direct
 host, miaowu.baidu.com, direct
 host, mihoyo.com, direct
 host, miniapp.bilibili.com, direct
@@ -226,6 +230,7 @@ host, s3.voicecloud.cn, direct
 host, s5.voicecloud.cn, direct
 host, scene.ke.com, direct
 host, sdk-open-phone.getui.com, direct
+host, sdk.e.qq.com, direct
 host, sdk.open.extension.getui.com, direct
 host, sdk.open.talk.gepush.com, direct
 host, sdk.open.talk.getui.com, direct
@@ -270,6 +275,9 @@ host, unpkg.com, direct
 host, upload-bbs.miyoushe.com, direct
 host, user-ipv6.jpush.cn, direct
 host, user.jpush.cn, direct
+host, v.gdt.qq.com, direct
+host, v2mi.gdt.qq.com, direct
+host, v3.gdt.qq.com, direct
 host, v6-accvideo.wns.qq.com, direct
 host, vfa.hpplay.cn, direct
 host, vod.300hu.com, direct
@@ -279,6 +287,7 @@ host, wbox.sinaimg.cn, direct
 host, wechat.com, direct
 host, weibo.com, direct
 host, weixin.qq.com, direct
+host, win.gdt.qq.com, direct
 host, www.coolapk.com, direct
 host, wx.qq.com, direct
 host, xmaterial.tu.qq.com, direct
@@ -1906,9 +1915,7 @@ host, antiadblocksystems.com, reject
 host, anymad.com, reject
 host, ap.dongqiudi.com, reject
 host, apex-ad.com, reject
-host, api-access.pangolin-sdk-toutiao.com, reject
 host, api-access.pangolin-sdk-toutiao.com.queniuyk.com, reject
-host, api-access.pangolin-sdk-toutiao1.com, reject
 host, api-access.pangolin-sdk-toutiao2.com, reject
 host, api-access.pangolin-sdk-toutiao3.com, reject
 host, api-access.pangolin-sdk-toutiao4.com, reject
@@ -3002,7 +3009,6 @@ host, metrics.mzstatic.com, reject
 host, metrics2.data.hicloud.com, reject
 host, metrika.yandex.ru, reject
 host, mfadsrvr.com, reject
-host, mi.gdt.qq.com, reject
 host, miav-cse.avlyun.com, reject
 host, micro-xdb.com, reject
 host, microad.jp, reject
@@ -3389,7 +3395,6 @@ host, sdk.aqyad.com, reject
 host, sdk.beizi.biz, reject
 host, sdk.cferw.com, reject
 host, sdk.dcksh.cn, reject
-host, sdk.e.qq.com, reject
 host, sdk.hzsanjiaomao.com, reject
 host, sdk.markmedia.com.cn, reject
 host, sdk.mobads.adwangmai.com, reject
@@ -3772,9 +3777,7 @@ host, v16-ad.byteoversea.com, reject
 host, v2-ad.video.yximgs.com, reject
 host, v2-api-channel-launcher.hismarttv.com, reject
 host, v2.gdt.qq.com, reject
-host, v2mi.gdt.qq.com, reject
 host, v3-ad.video.yximgs.com, reject
-host, v3.gdt.qq.com, reject
 host, v5-se-ex-mc-luna.douyinvod.com, reject
 host, v6-adashx.ut.amap.com, reject
 host, v6-adashx.ut.cainiao.com, reject
@@ -3860,7 +3863,6 @@ host, widgets.outbrain.com, reject
 host, widgets.pinterest.com, reject
 host, wikia-ads.wikia.com, reject
 host, wildcard.moatads.com.edgekey.net, reject
-host, win.gdt.qq.com, reject
 host, winadx.com, reject
 host, winneradsmedia.com, reject
 host, wlog.ksapisrv.com, reject
