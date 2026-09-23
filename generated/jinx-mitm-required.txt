@@ -6,7 +6,7 @@
 # Add them to your [mitm] hostname (comma separated) for the rewrite file to fire.
 # Domains from jinx-mitm-skip.txt are already excluded.
 # A comma-joined paste copy sits in jinx-mitm-required.oneline.txt.
-# Generated: 2026-09-23T10:57:14Z
+# Generated: 2026-09-23T16:18:06Z
 # Optional: to shorten the list, add any of these to
 # config/sources.json -> mitm_fold_suffixes, which folds the group
 # into a single *.suffix entry (widens decryption to all subdomains):
@@ -15,7 +15,7 @@
 #   baidu.com                8 hosts (appwk.baidu.com, c.tieba.baidu.com, ...)
 #   qishui.com               7 hosts (api.qishui.com, api3-hl.qishui.com, ...)
 #   kugou.com                7 hosts (activity.kugou.com, bjacshow.kugou.com, ...)
-#   163.com                  6 hosts (appconf.mail.163.com, client.mail.163.com, ...)
+#   amap.com                 6 hosts (amap-aos-info-nogw.amap.com, m5-x.amap.com, ...)
 *.amap.com
 *.cainiao.com
 *.if.qidian.com
