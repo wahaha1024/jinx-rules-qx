@@ -6,7 +6,7 @@
 # Add them to your [mitm] hostname (comma separated) for the rewrite file to fire.
 # Domains from jinx-mitm-skip.txt are already excluded.
 # A comma-joined paste copy sits in jinx-mitm-required.oneline.txt.
-# Generated: 2026-09-26T10:57:56Z
+# Generated: 2026-09-26T15:57:36Z
 # Optional: to shorten the list, add any of these to
 # config/sources.json -> mitm_fold_suffixes, which folds the group
 # into a single *.suffix entry (widens decryption to all subdomains):
