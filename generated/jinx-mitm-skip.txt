@@ -4,7 +4,7 @@
 # Upstream commit: f9c2edb01783
 # Append the entries below AFTER your own [mitm] hostname value (comma separated),
 # or remove them from an existing hostname list. Never let automation rewrite [mitm].
-# Generated: 2026-10-09T22:22:39Z
+# Generated: 2026-10-10T04:47:28Z
 *.apple.com
 *.captcha-open-b.aliyuncs.com
 *.captcha-open.aliyuncs.com
