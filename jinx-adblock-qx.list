@@ -3,7 +3,7 @@
 # Merged source: fuck_apps_ad_sr (https://raw.githubusercontent.com/uxudjs/Shadowrocket/refs/heads/main/modules/fuck_apps_ad_sr.sgmodule)
 # Upstream commit: 6e4037a931b6
 # Whitelist (direct) rules come first on purpose; QX matches top-down.
-# Generated: 2026-10-31T11:49:32Z
+# Generated: 2026-10-31T16:56:31Z
 # ==== WHITELIST (direct) ====
 host, 95516.com, direct
 host, ab.ke.com, direct
